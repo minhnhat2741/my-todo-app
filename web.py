@@ -3,8 +3,8 @@ import functions
 import hashlib
 
 
-st.title("Apotek assistent")
-st.subheader("Ting å gjøre på apotek")
+st.title("ApotekHjelper")
+st.subheader("Ting å gjøre")
 st.write("""Appen som hjelper deg å ungå hodepine""")
 
 
