@@ -47,7 +47,11 @@ def delete_todo_from_sheet(todo_text: str):
             ws.delete_rows(idx)
             return
 
+
+# App lay out
 st.title("✅ ApotekHjelper")
+st.subheader("⚠️ Ingen personopplysninger oppgis her")
+
 
 def add_todo():
     text = st.session_state.new_todo.strip()
