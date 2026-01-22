@@ -6,13 +6,13 @@ from gsheets import get_worksheet
 
 def require_login():
     if not st.session_state.get("logged_in", False):
-        st.warning("Please log in first.")
+        st.warning("Vennligst logg inn først.")
         st.stop()
 
 require_login()
 
 st.title("📦 Holdbarhet")
-st.caption("Sortert etter utløpsdato.")
+st.caption("Sorterer varer etter utløpsdato (snart utløpt først).")
 
 WS = get_worksheet(
     st.secrets["gsheet"]["spreadsheet_url"],
@@ -30,10 +30,10 @@ def ensure_headers():
     headers = values[0]
     if headers != EXPECTED_HEADERS:
         st.error(
-            "Header mismatch in products sheet.\n\n"
-            f"Expected: {EXPECTED_HEADERS}\n"
-            f"Found:    {headers}\n\n"
-            "Fix the headers in Google Sheets (row 1) to match exactly."
+            "Feil i kolonneoverskrifter i Google Sheets.\n\n"
+            f"Forventet: {EXPECTED_HEADERS}\n"
+            f"Fant:      {headers}\n\n"
+            "Fiks overskriftene i rad 1 slik at de matcher nøyaktig."
         )
         st.stop()
 
@@ -44,6 +44,10 @@ def load_products():
     headers = values[0]
     rows = values[1:]
     df = pd.DataFrame(rows, columns=headers)
+
+    # Make string columns safe for filtering
+    for col in ["varenummer", "navn", "location"]:
+        df[col] = df[col].fillna("").astype(str)
 
     # Parse date column (dato)
     df["dato"] = pd.to_datetime(df["dato"], errors="coerce").dt.date
@@ -69,27 +73,52 @@ def find_row_by_id(item_id: str) -> int | None:
 def delete_by_id(item_id: str):
     row = find_row_by_id(item_id)
     if row is None:
-        st.error("Could not find the item in the sheet (maybe already deleted).")
+        st.error("Fant ikke varen i arket (kanskje den allerede er slettet).")
         return
     WS.delete_rows(row)
 
-def update_by_id(item_id: str, varenummer: str, navn: str, dato_value: date, location: str):
-    row = find_row_by_id(item_id)
-    if row is None:
-        st.error("Could not find the item in the sheet (maybe deleted).")
-        return
-    # Update columns B..E (varenummer, navn, dato, location)
-    WS.update(f"B{row}:E{row}", [[varenummer, navn, dato_value.isoformat(), location]])
+def delete_all_expired():
+    """Delete all rows where dato < today (days_left < 0)."""
+    values = WS.get_all_values()
+    if not values or len(values) < 2:
+        return 0
+
+    headers = values[0]
+    rows = values[1:]
+
+    # Find relevant column indices
+    try:
+        id_idx = headers.index("id")
+        dato_idx = headers.index("dato")
+    except ValueError:
+        st.error("Mangler kolonnene 'id' eller 'dato' i arket.")
+        return 0
+
+    today = date.today()
+
+    # Determine sheet row numbers to delete (2..N)
+    rows_to_delete = []
+    for i, r in enumerate(rows, start=2):
+        dato_str = r[dato_idx] if len(r) > dato_idx else ""
+        d = pd.to_datetime(dato_str, errors="coerce").date() if dato_str else None
+        if d is not None and (d - today).days < 0:
+            rows_to_delete.append(i)
+
+    # Delete from bottom to top to avoid shifting row numbers
+    for row_number in reversed(rows_to_delete):
+        WS.delete_rows(row_number)
+
+    return len(rows_to_delete)
 
 # ---- ADD PRODUCT ----
-st.subheader("➕ Add product")
+st.subheader("➕ Legg til vare")
 
 with st.form("add_product_form", clear_on_submit=True):
     varenummer = st.text_input("Varenummer *")
     navn = st.text_input("Navn *")
-    dato_value = st.date_input("Dato (utløpsdato) *", value=date.today())
-    location = st.text_input("Location")
-    submitted = st.form_submit_button("Add", type="primary")
+    dato_value = st.date_input("Utløpsdato *", value=date.today())
+    location = st.text_input("Plassering")
+    submitted = st.form_submit_button("Legg til", type="primary")
 
     if submitted:
         varenummer = varenummer.strip()
@@ -97,10 +126,10 @@ with st.form("add_product_form", clear_on_submit=True):
         location = location.strip()
 
         if not varenummer or not navn:
-            st.error("Please fill in required fields: Varenummer and Navn.")
+            st.error("Fyll inn feltene merket med * (Varenummer og Navn).")
         else:
             add_product_to_sheet(varenummer, navn, dato_value, location)
-            st.success("✅ Product added!")
+            st.success("✅ Vare lagt til!")
             st.cache_data.clear()
             st.rerun()
 
@@ -109,7 +138,7 @@ st.divider()
 # ---- FILTERS ----
 df = load_products()
 
-search = st.text_input("Søk (varenummer/navn/location)", placeholder="Type to filter…").strip().lower()
+search = st.text_input("Søk (varenummer/navn/plassering)", placeholder="Skriv for å filtrere…").strip().lower()
 days = st.slider("Vis varer som utløper innen (dager)", 0, 365, 30)
 show_expired = st.checkbox("Inkluder allerede utløpte varer", value=True)
 
@@ -131,74 +160,72 @@ filtered = filtered.sort_values("days_left", ascending=True)
 
 def status(d):
     if d is None:
-        return "Unknown"
+        return "Ukjent"
     if d < 0:
-        return "Expired"
+        return "Utløpt"
     if d <= 7:
-        return "Expiring soon"
+        return "Utløper snart"
     return "OK"
 
 filtered["status"] = filtered["days_left"].apply(status)
 
-# ---- HIGHLIGHT TABLE ----
-st.subheader("📋 Produkter (sortert etter nærmeste utløpsdato)")
+# ---- BULK DELETE EXPIRED ----
+st.subheader("🧹 Rydding")
 
-def highlight_row(row):
-    d = row.get("days_left")
-    if d is None:
-        return [""] * len(row)
-    if d < 0:
-        return ["background-color: rgba(255, 0, 0, 0.15)"] * len(row)
-    if d <= 7:
-        return ["background-color: rgba(255, 255, 0, 0.15)"] * len(row)
-    return [""] * len(row)
+confirm_delete = st.checkbox("Jeg forstår at sletting er permanent", value=False)
+confirm_bulk = st.checkbox("Bekreft: Slett ALLE utløpte varer", value=False)
 
-show_cols = ["varenummer", "navn", "dato", "days_left", "status", "location"]
-styled = filtered[show_cols].style.apply(highlight_row, axis=1)
-st.dataframe(styled, use_container_width=True)
+c1, c2 = st.columns([0.7, 0.3])
+with c1:
+    st.write("Slett alle varer som allerede er utløpt (dato før i dag).")
+with c2:
+    if st.button("🧹 Slett alle utløpte", disabled=not (confirm_delete and confirm_bulk)):
+        deleted = delete_all_expired()
+        st.success(f"🧹 Slettet {deleted} utløpte varer.")
+        st.cache_data.clear()
+        st.rerun()
 
 st.divider()
 
-# ---- EDIT / DELETE ----
-st.subheader("✏️ Edit or 🗑️ Delete")
+# ---- PRODUCTS LIST WITH DELETE ----
+st.subheader("📋 Produkter (sortert etter nærmeste utløpsdato)")
 
 if filtered.empty:
-    st.info("No products match your filter.")
+    st.info("Ingen varer matcher filteret.")
 else:
-    options = []
-    for _, r in filtered.iterrows():
-        label = f'{r["varenummer"]} — {r["navn"]} — {r["dato"]} — {r["location"]}'
-        options.append((label, r["id"]))
+    for _, row in filtered.iterrows():
+        # background highlight
+        bg = ""
+        if row["days_left"] is not None:
+            if row["days_left"] < 0:
+                bg = "rgba(255, 0, 0, 0.10)"
+            elif row["days_left"] <= 7:
+                bg = "rgba(255, 255, 0, 0.15)"
 
-    selected_label = st.selectbox(
-        "Select product",
-        options=[o[0] for o in options],
-    )
-    selected_id = dict(options)[selected_label]
+        c1, c2 = st.columns([0.85, 0.15])
 
-    # Get the row data from full df (not only filtered)
-    row_data = df[df["id"] == selected_id].iloc[0]
-
-    with st.form("edit_form"):
-        new_varenummer = st.text_input("Varenummer", value=str(row_data["varenummer"]))
-        new_navn = st.text_input("Navn", value=str(row_data["navn"]))
-        new_dato = st.date_input("Dato", value=row_data["dato"] if pd.notna(row_data["dato"]) else date.today())
-        new_location = st.text_input("Location", value=str(row_data["location"]))
-
-        c1, c2 = st.columns(2)
         with c1:
-            save = st.form_submit_button("Save changes", type="primary")
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:{bg};
+                    padding:10px;
+                    border-radius:6px;
+                    margin-bottom:6px;">
+                    <b>{row['varenummer']}</b> — {row['navn']}<br>
+                    📅 {row['dato']} &nbsp;&nbsp; ⏳ {row['days_left']} dager igjen &nbsp;&nbsp; ({row['status']})<br>
+                    📍 {row['location']}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
         with c2:
-            delete = st.form_submit_button("Delete", help="Deletes this product from the sheet")
+            if st.button("🗑️ Slett", key=f"del_{row['id']}", disabled=not confirm_delete):
+                delete_by_id(row["id"])
+                st.success("🗑️ Vare slettet")
+                st.cache_data.clear()
+                st.rerun()
 
-        if save:
-            update_by_id(selected_id, new_varenummer.strip(), new_navn.strip(), new_dato, new_location.strip())
-            st.success("✅ Updated!")
-            st.cache_data.clear()
-            st.rerun()
-
-        if delete:
-            delete_by_id(selected_id)
-            st.success("🗑️ Deleted!")
-            st.cache_data.clear()
-            st.rerun()
+if not confirm_delete:
+    st.caption("Tips: Huk av «Jeg forstår at sletting er permanent» for å aktivere Slett-knappene.")
