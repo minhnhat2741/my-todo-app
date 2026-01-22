@@ -47,7 +47,7 @@ def delete_todo_from_sheet(todo_text: str):
             ws.delete_rows(idx)
             return
 
-st.title("✅ My Todo App")
+st.title("✅ ApotekHjelper")
 
 def add_todo():
     text = st.session_state.new_todo.strip()
