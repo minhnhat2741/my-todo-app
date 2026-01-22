@@ -74,8 +74,7 @@ def delete_todo_from_sheet(todo_text: str):
 
 
 # -- APP LAY OUT --
-st.title("✅ ApotekHjelper")
-st.subheader("⚠️ Ingen personopplysninger oppgis her")
+
 
 
 def add_todo():
@@ -91,6 +90,9 @@ st.text_input("", placeholder="Add something…", key="new_todo", on_change=add_
 
 # -- RUN APP --
 def todo_app():
+    st.title("✅ ApotekHjelper")
+    st.subheader("⚠️ Ingen personopplysninger oppgis her")
+
     todos = read_todos()
 
     if not todos:
