@@ -163,7 +163,7 @@ def status(d):
         return "Ukjent"
     if d < 0:
         return "Utløpt"
-    if d <= 7:
+    if d <= 30:
         return "Utløper snart"
     return "OK"
 
