@@ -90,7 +90,7 @@ st.text_input("", placeholder="Add something…", key="new_todo", on_change=add_
 
 
 # -- RUN APP --
-def todo_app()
+def todo_app():
     todos = read_todos()
 
     if not todos:
