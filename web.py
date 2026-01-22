@@ -28,7 +28,7 @@ require_login()
 # ---------- SIDEBAR: link ABOVE logout ----------
 #st.sidebar.header("Menu")
 
-st.sidebar.divider()
+#st.sidebar.divider()
 
 if st.sidebar.button("Log out"):
     st.session_state["logged_in"] = False
