@@ -11,6 +11,31 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+
+# -- AUTH --
+def login_page():
+    st.title("🔐 Login")
+    st.caption("Enter the password to access the Todo App.")
+
+    pw = st.text_input("Password", type="password")
+
+    if st.button("Log in", type="primary"):
+        if pw == st.secrets["auth"]["password"]:
+            st.session_state["logged_in"] = True
+            st.rerun()
+        else:
+            st.error("Wrong password")
+
+
+def require_login():
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+    if not st.session_state["logged_in"]:
+        login_page()
+        st.stop()
+
+
+# -- GOOGLE SHEET --
 @st.cache_resource
 def get_client():
     creds = Credentials.from_service_account_info(
@@ -48,7 +73,7 @@ def delete_todo_from_sheet(todo_text: str):
             return
 
 
-# App lay out
+# -- APP LAY OUT --
 st.title("✅ ApotekHjelper")
 st.subheader("⚠️ Ingen personopplysninger oppgis her")
 
@@ -63,20 +88,30 @@ def add_todo():
 
 st.text_input("", placeholder="Add something…", key="new_todo", on_change=add_todo)
 
-todos = read_todos()
 
-if not todos:
-    st.info("No todos yet. Add one above 👆")
-else:
-    for todo in todos:
-        c1, c2 = st.columns([0.85, 0.15])
-        with c1:
-            st.write(todo)
-        with c2:
-            if st.button("🗑️ Delete", key=f"del_{todo}"):
-                delete_todo_from_sheet(todo)
-                st.rerun()
+# -- RUN APP --
+def todo_app()
+    todos = read_todos()
 
+    if not todos:
+        st.info("No todos yet. Add one above 👆")
+    else:
+        for todo in todos:
+            c1, c2 = st.columns([0.85, 0.15])
+            with c1:
+                st.write(todo)
+            with c2:
+                if st.button("🗑️ Delete", key=f"del_{todo}"):
+                    delete_todo_from_sheet(todo)
+                    st.rerun()
+    st.sidebar.divider()
+        if st.sidebar.button("Log out"):
+            st.session_state["logged_in"] = False
+            st.rerun()
+
+# -- RUN --
+require_login()
+todo_app()
 
 
 
