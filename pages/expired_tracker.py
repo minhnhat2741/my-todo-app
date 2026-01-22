@@ -144,7 +144,7 @@ filtered["status"] = filtered["days_left"].apply(status)
 st.subheader("📋 Produkter (sortert etter nærmeste utløpsdato)")
 
 def highlight_row(row):
-    d = row.get("days_left")
+    d = int(row.get("days_left"))
     if d is None:
         return [""] * len(row)
     if d < 0:
