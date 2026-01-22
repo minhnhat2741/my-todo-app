@@ -85,13 +85,15 @@ def add_todo():
     st.session_state.new_todo = ""
     #st.rerun()
 
-st.text_input("", placeholder="Add something…", key="new_todo", on_change=add_todo)
 
 
-# -- RUN APP --
+
+# -- APP LAYOUT --
 def todo_app():
     st.title("✅ ApotekHjelper")
     st.subheader("⚠️ Ingen personopplysninger oppgis her")
+
+    st.text_input("", placeholder="Add something…", key="new_todo", on_change=add_todo)
 
     todos = read_todos()
 
