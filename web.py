@@ -29,9 +29,10 @@ require_login()
 st.sidebar.header("Menu")
 
 
-st.sidebar.page_link("pages/expired_tracker.py", label="📦 Expiry products")
-
-
+try:
+    st.sidebar.page_link("pages/expired_tracker.py", label="📦 Expiry products")
+except Exception:
+    st.sidebar.info("Open Expiry products from the Pages menu in the sidebar.")
 
 st.sidebar.divider()
 
