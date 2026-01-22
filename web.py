@@ -55,7 +55,7 @@ def add_todo():
         return
     add_todo_to_sheet(text)
     st.session_state.new_todo = ""
-    st.rerun()
+    #st.rerun()
 
 st.text_input("", placeholder="Add something…", key="new_todo", on_change=add_todo)
 
