@@ -11,8 +11,8 @@ def require_login():
 
 require_login()
 
-st.title("📦 Expiry products")
-st.caption("Sorts by products that expire soon (dato).")
+st.title("📦 Holdbarhet")
+st.caption("Sortert etter utløpsdato.")
 
 WS = get_worksheet(
     st.secrets["gsheet"]["spreadsheet_url"],
@@ -109,9 +109,9 @@ st.divider()
 # ---- FILTERS ----
 df = load_products()
 
-search = st.text_input("Search (varenummer/navn/location)", placeholder="Type to filter…").strip().lower()
-days = st.slider("Show items expiring within (days)", 0, 365, 30)
-show_expired = st.checkbox("Include already expired", value=True)
+search = st.text_input("Søk (varenummer/navn/location)", placeholder="Type to filter…").strip().lower()
+days = st.slider("Vis varer som utløper innen (dager)", 0, 365, 30)
+show_expired = st.checkbox("Inkluder allerede utløpte varer", value=True)
 
 filtered = df.copy()
 filtered = filtered[filtered["dato"].notna()]  # keep only valid dates
@@ -141,7 +141,7 @@ def status(d):
 filtered["status"] = filtered["days_left"].apply(status)
 
 # ---- HIGHLIGHT TABLE ----
-st.subheader("📋 Products (sorted by soonest expiry)")
+st.subheader("📋 Produkter (sortert etter nærmeste utløpsdato)")
 
 def highlight_row(row):
     d = row.get("days_left")
