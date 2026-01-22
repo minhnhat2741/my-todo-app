@@ -105,9 +105,9 @@ def todo_app():
                     delete_todo_from_sheet(todo)
                     st.rerun()
     st.sidebar.divider()
-        if st.sidebar.button("Log out"):
-            st.session_state["logged_in"] = False
-            st.rerun()
+    if st.sidebar.button("Log out"):
+        st.session_state["logged_in"] = False
+        st.rerun()
 
 # -- RUN --
 require_login()
