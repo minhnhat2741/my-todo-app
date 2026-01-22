@@ -28,7 +28,7 @@ require_login()
 # ---------- SIDEBAR: link ABOVE logout ----------
 st.sidebar.header("Menu")
 try:
-    #st.sidebar.page_link("pages/expired_tracker.py", label="📦 Expiry products")
+    st.sidebar.page_link("pages/expired_tracker.py", label="📦 Expiry products")
 except Exception:
     st.sidebar.info("Open Expiry products from the Pages menu in the sidebar.")
 
