@@ -153,7 +153,7 @@ def highlight_row(row):
         return ["background-color: rgba(255, 255, 0, 0.15)"] * len(row)
     return [""] * len(row)
 
-show_cols = ["id", "varenummer", "navn", "dato", "days_left", "status", "location"]
+show_cols = ["varenummer", "navn", "dato", "days_left", "status", "location"]
 styled = filtered[show_cols].style.apply(highlight_row, axis=1)
 st.dataframe(styled, use_container_width=True)
 
