@@ -26,10 +26,7 @@ def require_login():
 require_login()
 
 # ---------- SIDEBAR: link ABOVE logout ----------
-st.sidebar.header("Menu")
-
-
-
+#st.sidebar.header("Menu")
 
 st.sidebar.divider()
 
