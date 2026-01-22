@@ -199,7 +199,7 @@ else:
         if row["days_left"] is not None:
             if row["days_left"] < 0:
                 bg = "rgba(255, 0, 0, 0.10)"
-            elif row["days_left"] <= 7:
+            elif row["days_left"] <= 30:
                 bg = "rgba(255, 255, 0, 0.15)"
 
         c1, c2 = st.columns([0.85, 0.15])
