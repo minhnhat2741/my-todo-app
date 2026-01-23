@@ -69,7 +69,6 @@ def set_status(item_id: str, new_status: str):
     if row is None:
         st.error("Fant ikke raden (kanskje slettet).")
         return
-    # status column is F (6) with new headers
     WS.update(f"F{row}", [[new_status]])
 
 def delete_item(item_id: str):
@@ -81,6 +80,7 @@ def delete_item(item_id: str):
 
 # ---- ADD FORM ----
 st.subheader("➕ Registrer feil vare")
+
 with st.form("add_error_form", clear_on_submit=True):
     c1, c2, c3, c4 = st.columns([0.22, 0.25, 0.33, 0.20])
     with c1:
@@ -113,33 +113,22 @@ st.divider()
 # ---- FILTERS ----
 df = load_rows()
 
-c1, c2, c3 = st.columns([0.50, 0.25, 0.25])
+c1, c2 = st.columns([0.7, 0.3])
 with c1:
-    query = st.text_input("Søk", placeholder="Søk på varenummer/navn/kommentar…").strip().lower()
+    query = st.text_input("Søk", placeholder="Søk på varenummer / navn / kommentar…").strip().lower()
 with c2:
     vis_behandlede = st.checkbox("Vis behandlede", value=False)
-with c3:
-    statuses = st.multiselect("Statusfilter", STATUS_OPTIONS, default=["Ny", "Under behandling"])
 
-min_date, max_date = st.date_input(
-    "Datoperiode",
-    value=(date.today().replace(day=1), date.today()),
-)
+statuses = st.multiselect("Statusfilter", STATUS_OPTIONS, default=["Ny", "Under behandling"])
 
 view = df.copy()
-view = view[view["dato"].notna()].copy()
 
 if not vis_behandlede:
     view = view[view["status"] != "Behandlet"]
 
-# if user selected statuses, apply them
 if statuses:
     view = view[view["status"].isin(statuses)]
 
-# date range filter
-view = view[(view["dato"] >= min_date) & (view["dato"] <= max_date)]
-
-# text filter
 if query:
     view = view[
         view["varenummer"].str.lower().str.contains(query, na=False)
@@ -147,7 +136,6 @@ if query:
         | view["kommentar"].str.lower().str.contains(query, na=False)
     ]
 
-# sort newest first
 view = view.sort_values(by=["dato"], ascending=False)
 
 st.subheader(f"📋 Oversikt ({len(view)} rader)")
@@ -156,28 +144,27 @@ st.dataframe(view[show_cols], use_container_width=True)
 
 st.divider()
 
-# ---- ACTIONS ON SHORTLIST ----
+# ---- ACTIONS (FILTER-FIRST) ----
 st.subheader("⚡ Handlinger")
 
 if view.empty:
     st.info("Ingen rader matcher filteret.")
 else:
-    # Limit the action list to top N rows after filtering
     N = st.slider("Antall rader i handlingslisten", 5, 100, 30)
     shortlist = view.head(N)
 
     options = []
     for _, r in shortlist.iterrows():
-        label = f'{r["dato"]} | {r["varenummer"]} | {r["navn"]} | {r["status"]} | antall {r["antall_feil_varer"]}'
+        label = f'{r["dato"]} | {r["varenummer"]} | {r["navn"]} | {r["status"]}'
         options.append((label, r["id"]))
 
-    selected_label = st.selectbox("Velg rad (fra filtrert topp-liste)", options=[o[0] for o in options])
+    selected_label = st.selectbox("Velg rad (fra filtrert liste)", options=[o[0] for o in options])
     selected_id = dict(options)[selected_label]
 
     selected_row = df[df["id"] == selected_id].iloc[0]
-    st.write("**Valgt:**")
-    st.write(f'📅 {selected_row["dato"]} | {selected_row["varenummer"]} — {selected_row["navn"]}')
-    st.write(f'Antall: {selected_row["antall_feil_varer"]} | Status: {selected_row["status"]}')
+
+    st.write(f"**Valgt:** {selected_row['varenummer']} — {selected_row['navn']}")
+    st.write(f"Antall: {selected_row['antall_feil_varer']} | Status: {selected_row['status']}")
     if selected_row["kommentar"]:
         st.caption(selected_row["kommentar"])
 
