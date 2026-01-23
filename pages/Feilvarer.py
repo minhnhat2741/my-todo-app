@@ -19,7 +19,7 @@ WS = get_worksheet(
     st.secrets["errors"]["worksheet"],  # e.g. "feilvarer"
 )
 
-EXPECTED_HEADERS = ["id", "dato", "varenummer", "antall_feil_varer", "status", "kommentar"]
+EXPECTED_HEADERS = ["id", "dato", "varenummer", "navn", "antall_feil_varer", "status", "kommentar"]
 STATUS_OPTIONS = ["Ny", "Under behandling", "Behandlet"]
 
 def ensure_headers():
@@ -45,7 +45,7 @@ def load_rows():
     rows = values[1:]
     df = pd.DataFrame(rows, columns=headers)
 
-    for col in ["id", "varenummer", "antall_feil_varer", "status", "kommentar"]:
+    for col in ["id", "varenummer", "navn", "antall_feil_varer", "status", "kommentar"]:
         df[col] = df[col].fillna("").astype(str)
 
     df["dato"] = pd.to_datetime(df["dato"], errors="coerce").dt.date
@@ -60,16 +60,17 @@ def find_sheet_row_by_id(item_id: str) -> int | None:
             return idx
     return None
 
-def add_error(dato_value: date, varenummer: str, antall: int, status: str, kommentar: str):
+def add_error(dato_value: date, varenummer: str, navn: str, antall: int, status: str, kommentar: str):
     new_id = str(uuid.uuid4())
-    WS.append_row([new_id, dato_value.isoformat(), varenummer, str(antall), status, kommentar])
+    WS.append_row([new_id, dato_value.isoformat(), varenummer, navn, str(antall), status, kommentar])
 
 def set_status(item_id: str, new_status: str):
     row = find_sheet_row_by_id(item_id)
     if row is None:
         st.error("Fant ikke raden (kanskje slettet).")
         return
-    WS.update(f"E{row}", [[new_status]])
+    # status column is F (6) with new headers
+    WS.update(f"F{row}", [[new_status]])
 
 def delete_item(item_id: str):
     row = find_sheet_row_by_id(item_id)
@@ -81,13 +82,15 @@ def delete_item(item_id: str):
 # ---- ADD FORM ----
 st.subheader("➕ Registrer feil vare")
 with st.form("add_error_form", clear_on_submit=True):
-    c1, c2, c3 = st.columns([0.25, 0.35, 0.20])
+    c1, c2, c3, c4 = st.columns([0.22, 0.25, 0.33, 0.20])
     with c1:
         dato_value = st.date_input("Dato *", value=date.today())
     with c2:
         varenummer = st.text_input("Varenummer *")
     with c3:
-        antall = st.number_input("Antall feil varer *", min_value=1, step=1, value=1)
+        navn = st.text_input("Navn *")
+    with c4:
+        antall = st.number_input("Antall *", min_value=1, step=1, value=1)
 
     status = st.selectbox("Status", STATUS_OPTIONS, index=0)
     kommentar = st.text_input("Kommentar", placeholder="Valgfritt")
@@ -95,86 +98,107 @@ with st.form("add_error_form", clear_on_submit=True):
     submitted = st.form_submit_button("Legg til", type="primary")
     if submitted:
         varenummer = varenummer.strip()
+        navn = navn.strip()
         kommentar = kommentar.strip()
-        if not varenummer:
-            st.error("Varenummer er påkrevd.")
+        if not varenummer or not navn:
+            st.error("Varenummer og Navn er påkrevd.")
         else:
-            add_error(dato_value, varenummer, int(antall), status, kommentar)
+            add_error(dato_value, varenummer, navn, int(antall), status, kommentar)
             st.success("✅ Registrert!")
             st.cache_data.clear()
             st.rerun()
 
 st.divider()
 
-# ---- FILTERS + TABLE ----
+# ---- FILTERS ----
 df = load_rows()
 
-vis_behandlede = st.checkbox("Vis behandlede", value=False)
-query = st.text_input("Søk", placeholder="Søk på varenummer, kommentar, status…").strip().lower()
+c1, c2, c3 = st.columns([0.50, 0.25, 0.25])
+with c1:
+    query = st.text_input("Søk", placeholder="Søk på varenummer/navn/kommentar…").strip().lower()
+with c2:
+    vis_behandlede = st.checkbox("Vis behandlede", value=False)
+with c3:
+    statuses = st.multiselect("Statusfilter", STATUS_OPTIONS, default=["Ny", "Under behandling"])
+
+min_date, max_date = st.date_input(
+    "Datoperiode",
+    value=(date.today().replace(day=1), date.today()),
+)
 
 view = df.copy()
+view = view[view["dato"].notna()].copy()
+
 if not vis_behandlede:
     view = view[view["status"] != "Behandlet"]
 
+# if user selected statuses, apply them
+if statuses:
+    view = view[view["status"].isin(statuses)]
+
+# date range filter
+view = view[(view["dato"] >= min_date) & (view["dato"] <= max_date)]
+
+# text filter
 if query:
     view = view[
         view["varenummer"].str.lower().str.contains(query, na=False)
+        | view["navn"].str.lower().str.contains(query, na=False)
         | view["kommentar"].str.lower().str.contains(query, na=False)
-        | view["status"].str.lower().str.contains(query, na=False)
     ]
 
-view = view.sort_values(by=["dato", "status"], ascending=[False, True])
+# sort newest first
+view = view.sort_values(by=["dato"], ascending=False)
 
-st.subheader("📋 Oversikt")
-show_cols = ["dato", "varenummer", "antall_feil_varer", "status", "kommentar"]
+st.subheader(f"📋 Oversikt ({len(view)} rader)")
+show_cols = ["dato", "varenummer", "navn", "antall_feil_varer", "status", "kommentar"]
 st.dataframe(view[show_cols], use_container_width=True)
 
 st.divider()
 
-# ---- ACTIONS (fast) ----
+# ---- ACTIONS ON SHORTLIST ----
 st.subheader("⚡ Handlinger")
 
 if view.empty:
-    st.info("Ingen rader å vise.")
+    st.info("Ingen rader matcher filteret.")
 else:
-    # Selectbox is searchable, good for 1000 items
+    # Limit the action list to top N rows after filtering
+    N = st.slider("Antall rader i handlingslisten", 5, 100, 30)
+    shortlist = view.head(N)
+
     options = []
-    for _, r in view.iterrows():
-        label = f'{r["dato"]} | {r["varenummer"]} | antall {r["antall_feil_varer"]} | {r["status"]}'
+    for _, r in shortlist.iterrows():
+        label = f'{r["dato"]} | {r["varenummer"]} | {r["navn"]} | {r["status"]} | antall {r["antall_feil_varer"]}'
         options.append((label, r["id"]))
 
-    selected_label = st.selectbox("Velg rad", options=[o[0] for o in options])
+    selected_label = st.selectbox("Velg rad (fra filtrert topp-liste)", options=[o[0] for o in options])
     selected_id = dict(options)[selected_label]
 
     selected_row = df[df["id"] == selected_id].iloc[0]
-
     st.write("**Valgt:**")
-    st.write(f'📅 {selected_row["dato"]} | {selected_row["varenummer"]} | Antall: {selected_row["antall_feil_varer"]}')
-    st.write(f'Status: {selected_row["status"]}')
+    st.write(f'📅 {selected_row["dato"]} | {selected_row["varenummer"]} — {selected_row["navn"]}')
+    st.write(f'Antall: {selected_row["antall_feil_varer"]} | Status: {selected_row["status"]}')
     if selected_row["kommentar"]:
         st.caption(selected_row["kommentar"])
 
-    c1, c2, c3 = st.columns([0.34, 0.33, 0.33])
+    cA, cB, cC = st.columns(3)
 
-    with c1:
+    with cA:
         new_status = st.selectbox("Ny status", STATUS_OPTIONS, index=STATUS_OPTIONS.index(selected_row["status"]))
         if st.button("Oppdater status", type="primary"):
             set_status(selected_id, new_status)
-            st.success("✅ Status oppdatert")
             st.cache_data.clear()
             st.rerun()
 
-    with c2:
+    with cB:
         if st.button("✅ Sett til Behandlet"):
             set_status(selected_id, "Behandlet")
-            st.success("✅ Markert som behandlet")
             st.cache_data.clear()
             st.rerun()
 
-    with c3:
+    with cC:
         confirm_delete = st.checkbox("Bekreft sletting", value=False)
         if st.button("🗑️ Slett", disabled=not confirm_delete):
             delete_item(selected_id)
-            st.success("🗑️ Slettet")
             st.cache_data.clear()
             st.rerun()
