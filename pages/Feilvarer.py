@@ -113,18 +113,14 @@ st.divider()
 # ---- FILTERS ----
 df = load_rows()
 
-c1, c2 = st.columns([0.7, 0.3])
-with c1:
-    query = st.text_input("Søk", placeholder="Søk på varenummer / navn / kommentar…").strip().lower()
-with c2:
-    vis_behandlede = st.checkbox("Vis behandlede", value=False)
-
-statuses = st.multiselect("Statusfilter", STATUS_OPTIONS, default=["Ny", "Under behandling"])
+query = st.text_input("Søk", placeholder="Søk på varenummer / navn / kommentar…").strip().lower()
+statuses = st.multiselect(
+    "Statusfilter",
+    STATUS_OPTIONS,
+    default=["Ny", "Under behandling"]
+)
 
 view = df.copy()
-
-if not vis_behandlede:
-    view = view[view["status"] != "Behandlet"]
 
 if statuses:
     view = view[view["status"].isin(statuses)]
@@ -171,17 +167,22 @@ else:
     cA, cB, cC = st.columns(3)
 
     with cA:
-        new_status = st.selectbox("Ny status", STATUS_OPTIONS, index=STATUS_OPTIONS.index(selected_row["status"]))
+        new_status = st.selectbox(
+            "Ny status",
+            STATUS_OPTIONS,
+            index=STATUS_OPTIONS.index(selected_row["status"])
+        )
         if st.button("Oppdater status", type="primary"):
             set_status(selected_id, new_status)
             st.cache_data.clear()
             st.rerun()
 
     with cB:
-        if st.button("✅ Sett til Behandlet"):
-            set_status(selected_id, "Behandlet")
-            st.cache_data.clear()
-            st.rerun()
+        if selected_row["status"] != "Behandlet":
+            if st.button("✅ Sett til Behandlet"):
+                set_status(selected_id, "Behandlet")
+                st.cache_data.clear()
+                st.rerun()
 
     with cC:
         confirm_delete = st.checkbox("Bekreft sletting", value=False)
